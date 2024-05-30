@@ -7,65 +7,70 @@
 </head>
 <body>
     <h2>Enter Payment Details</h2>
-    <?php
-    require_once 'config.php'; // Include your Razorpay API keys
-    require_once 'vendor/autoload.php'; // Include Razorpay PHP SDK
-
-    use Razorpay\Api\Api;
-
-
-    $api = new Api($keyId, $keySecret);
-
-    // Create an order
-    $orderData = [
-        'receipt'  => 'rcptid_' . uniqid(),
-        'amount'   => 50000, // Amount in paisa (e.g., 50000 for ₹500.00)
-        'currency' => 'INR'
-    ];
-
-    $razorpayOrder = $api->order->create($orderData);
-    ?>
-    <form id="paymentForm" action="pay.php" method="POST">
-        <input type="hidden" name="razorpay_order_id" value="<?php echo $razorpayOrder->id; ?>">
-        <input type="hidden" name="razorpay_payment_id" id="razorpay_payment_id">
-        <input type="hidden" name="razorpay_signature" id="razorpay_signature">
+  
+    <form id="paymentForm">
         <label for="amount">Amount (INR)</label><br>
-        <input type="text" id="amount" name="amount" value="500"><br><br>
-        <button type="submit">Pay Now</button>
+        <input type="text" id="amount" name="amount"><br><br>
+        <button type="button" id="payButton">Pay Now</button>
     </form>
+    
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <script>
-        var options = {
-            "key": "<?php echo $keyId; ?>",
-            "amount": document.getElementById('amount').value * 100, // Convert amount to paisa
-            "currency": "INR",
-            "name": "Acme Corp",
-            "description": "Test Transaction",
-            "image": "https://example.com/your_logo",
-            "order_id": "<?php echo $razorpayOrder->id; ?>",
-            "handler": function (response) {
-                // Get the payment details
-                document.getElementById('razorpay_payment_id').value = response.razorpay_payment_id;
-                document.getElementById('razorpay_signature').value = response.razorpay_signature;
-                // Submit the form
-                document.getElementById('paymentForm').submit();
-            },
-            "prefill": {
-                "name": "Gaurav Kumar",
-                "email": "gaurav.kumar@example.com",
-                "contact": "9000090000"
-            },
-            "notes": {
-                "address": "Razorpay Corporate Office"
-            },
-            "theme": {
-                "color": "#3399cc"
+        document.getElementById('payButton').onclick = function(e) {
+            var amount = document.getElementById('amount').value;
+
+            if (!amount) {
+                alert('Please enter an amount.');
+                return;
             }
-        };
-        var rzp1 = new Razorpay(options);
-        document.getElementById('paymentForm').onsubmit = function(e){
-            rzp1.open();
-            e.preventDefault();
+
+            // Send the amount to the server to create the order
+            fetch('create_order.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ amount: amount })
+            })
+            .then(response => response.json())
+            .then(data => {
+                var options = {
+                    "key": data.key, // Razorpay API Key
+                    "amount": data.amount, // Amount in paisa
+                    "currency": "INR",
+                    "name": "Acme Corp",
+                    "description": "Test Transaction",
+                    "image": "https://example.com/your_logo",
+                    "order_id": data.order_id, // Razorpay Order ID
+                    "handler": function (response) {
+                        // Get the payment details
+                        var form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = 'pay.php';
+                        form.innerHTML = `
+                            <input type="hidden" name="razorpay_payment_id" value="${response.razorpay_payment_id}">
+                            <input type="hidden" name="razorpay_order_id" value="${data.order_id}">
+                            <input type="hidden" name="razorpay_signature" value="${response.razorpay_signature}">
+                        `;
+                        document.body.appendChild(form);
+                        form.submit();
+                    },
+                    "prefill": {
+                        "name": "Gaurav Kumar",
+                        "email": "gaurav.kumar@example.com",
+                        "contact": "9000090000"
+                    },
+                    "notes": {
+                        "address": "Razorpay Corporate Office"
+                    },
+                    "theme": {
+                        "color": "#3399cc"
+                    }
+                };
+                var rzp1 = new Razorpay(options);
+                rzp1.open();
+            })
+            .catch(error => console.error('Error:', error));
         }
     </script>
 </body>
